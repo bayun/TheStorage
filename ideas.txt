@@ -1,0 +1,196 @@
+Category:
+	name-addressed container
+	versioned
+
+Document:
+	uniquely addressed by id
+	name-addressed in category
+	versioned
+	contained in one or more Category
+	content('value') stored externally
+
+Property:
+	name-addressed object
+	non-versioned
+	content('value') stored internally
+
+
+Category: StoredObject
+	CID id
+	string name
+	rename
+	CatList categories
+	DocList documents
+	PropertyList properties
+	insert
+		Category/CID
+		Document/DID
+		FileName
+		Property/PID
+	remove
+		Category
+		Document
+		Property
+	versioned
+		bool
+		-
+	VersionList version
+
+
+Document: StoredObject
+	DID id
+	string name
+	rename
+	value
+		-
+		FileName
+		string
+	versioned
+		bool
+		-
+	VersionList version
+
+Property
+	PID id
+	string name
+	value
+		-
+		string
+	int parent
+
+
+Storage: Category
+	insert
+		FileName [CatList]
+		string [CatList]
+	addCategory
+		string
+	remove
+		DID
+		CID
+	documents - orphaned documents
+	categories - top-level categories
+	findCategories
+		string, CatList, PropList
+	findDocuments
+		CatList, PropList
+
+
+
+How to store:
+=============
+
+Properties:
+----------
+table 'properties'
+	int PID (index)
+	string name
+	string value
+
+Documents:
+---------
+
+table 'objects'
+	int ID
+	int type = 1
+	int VID (doc version ref)
+
+
+table 'versions'
+	int VID
+	string value (name of FS object)
+
+table 'propbind'
+	int DPID
+	int VID
+	int PID
+
+
+Categories:
+----------
+
+table 'objects'
+	int ID
+	int type = 0
+	int VID
+
+table 'versions'
+	int VID
+	string value (category name)
+
+table 'catchild'
+	int CDID
+	int UID
+	int LID
+	int level
+
+table 'propbind'
+	int DPID
+	int VID
+	int PID
+
+
+Versioning
+==========
+
+* 'BEGIN TRANSACTION'
+* get current VID from CID/DID
+	oldvid = 'SELECT VID from objects WHERE ID=?' (id)
+* Create new version record (possibly with new 'value'), get it's VID
+	newvid = 'INSERT INTO versions (value) SELECT value FROM versions WHERE vid=?' (oldvid)
+		or (if we want to create new version with new value)
+	newvid = 'INSERT INTO versions (value) VALUES(?)' (newValue)
+* From old version copy 'propbind' records from new VID, possibly altering or omitting some of them
+	'INSERT INTO propbind (vid, pid) SELECT <newvid>, pid FROM propbind WHERE vid=?' (oldvid)
+		or (if we want to skip property by name)
+	'INSERT INTO propbind (vid, pid) SELECT <newvid>, pid FROM propbind WHERE vid=? AND name <> >' (oldvid, propName)
+		or (if we want to skip property by id)
+	'INSERT INTO propbind (vid, pid) SELECT <newvid>, pid FROM propbind WHERE vid=? AND pid != ?' (oldvid, pid)
+* if needed, add new props or alter 'value'
+	newpid = 'INSERT INTO properties (name, value) VALUES (?,?)' (name, value)
+	'INSERT INTO propbind (vid, pid) VALUES(newvid, newpid)
+		or (if we wan to alter 'value')
+	'UPDATE versions SET value=? WHERE vid=?' (value, newvid)
+* set current VID for CID/DID to new VID
+	'UPDATE objects SET vid=? WHERE id=?' (newvid, id)
+* 'COMMIT'
+
+
+Insert category
+===============
+
+Insert category 'name' into given (cid):
+
+* check if category with this name already exists:
+	newcid = 'SELECT lid FROM catchild 
+		INNER JOIN objects ON (objects.id = catchild.lid)
+		INNER JOIN versions ON (versions.vid = objects.vid)
+		WHERE catchild.uid=? AND versions.value=?' (cid, name)
+* if no such category, first create version:
+	newvid = 'INSERT INTO versions (value) VALUES (?)' (name)
+* create category:
+	newcid = 'INSERT INTO objects (type, vid) VALUES(0, ?)' (newvid)
+* set it as child of cid and it's parents:
+	''
+	'INSERT INTO catchild (uid, lid, level) SELECT <cid>, lid, level + 1 FROM catchild WHERE uid=?' (cid)
+
+
+Queries
+=======
+
+* Ids of all documents from category by name:
+	'SELECT did FROM catchild INNER JOIN objects AS cats ON (cats.id = catchild.uid) WHERE cats.name = ?' (categoryName)
+* Names of all documents from category by name:
+	'SELECT did FROM catchild INNER JOIN objects AS cats ON (cats.id = catchild.uid) 
+		INNER JOIN objects AS docs ON (catchild.lid = docs.id)
+		INNER JOIN propbind ON (docs.vid = propbind.vid)
+		INNER JOIN properties ON (propbind.pid = properties.pid)
+		WHERE cats.name = ? and properties.name = "name"' (categoryName)
+
+* Select all immediate children categories of given:
+	'SELECT lid FROM catchild WHERE level = 1 AND uid = ?' (cid)
+
+* Select all documents under given category
+	'SELECT docs.id FROM objects AS docs INNER JOIN catchild ON (docs.id = catchild.lid) 
+		WHERE catchild.uid = ?' (cid)
+
