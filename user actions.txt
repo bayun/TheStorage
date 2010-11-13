@@ -1,0 +1,87 @@
+What actions MUST be implemented?
+=================================
+
+R - required;
+O - optional.
+
+Create categories
+	R	category name
+	O	parent name
+	O	list of properties
+output:
+	O	category IDs
+
+Remove category
+	R category ID
+output:
+	bool success
+
+Rename category
+	R	category ID
+	R	new name
+output:
+	bool success
+
+Import files into The Storage
+	R	file list
+	R	list of categories
+	O	list of properties
+output:
+	O	document IDs
+
+Remove document from storage
+	R	document ID
+output:
+	bool success
+
+Add documents into categories
+	R	document ID list
+	R	list of categories
+output:
+	bool success
+
+Remove documents from categories
+	R	document ID list
+	R	list of categories
+output:
+	bool success
+
+Set category properties
+	R	category ID list
+	R	property list
+output:
+	O	Property ID list
+
+Remove category properties
+	R	category ID
+	R	property name list
+output:
+	O	Property ID list
+
+Set document properties
+	R	category ID list
+	R	property list
+output:
+	O	Property ID list
+
+Remove document properties
+	R	category ID
+	R	property name list
+output:
+	O	Property ID list
+
+Get category contents
+	R	category list
+output:
+	R	Document ID list
+
+Get Document Data by ID
+	R	Document ID
+output:
+	R	Document properties
+
+Get Category Data by ID
+	R	Category ID
+output:
+	R	Category properties
+
